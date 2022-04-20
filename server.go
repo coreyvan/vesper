@@ -2,6 +2,7 @@ package vesper
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 )
@@ -54,6 +55,13 @@ func (s *Server[T]) Handle(route string, handler Handler[T]) {
 			w: w,
 			r: req,
 		})
-		handler(outCtx)
+		if err := handler(outCtx); err != nil {
+			w.WriteHeader(500)
+			if _, err := w.Write([]byte("Server Error")); err != nil {
+				log.Printf("error writing to client: %v", err)
+			}
+			
+			log.Printf("error from handler: %v", err)
+		}
 	})
 }

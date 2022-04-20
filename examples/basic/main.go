@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/coreyvan/vesper"
 	"log"
 )
@@ -13,9 +14,14 @@ func main() {
 		Port: port,
 	})
 
-	srv.Handle("/", func(c vesper.Context) {
+	srv.Handle("/", func(c vesper.Context) error {
 		c.ResponseWriter().WriteHeader(200)
-		c.ResponseWriter().Write([]byte("Hello World!"))
+		_, err := c.ResponseWriter().Write([]byte("Hello World!"))
+		return err
+	})
+
+	srv.Handle("/error", func(c vesper.Context) error {
+		return fmt.Errorf("oopsie")
 	})
 
 	log.Printf("server listening on port %s...", port)
