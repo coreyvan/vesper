@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/coreyvan/vesper"
 	"log"
+	"net/http"
 	"os"
 )
 
@@ -14,11 +16,16 @@ type CustomContext struct {
 	Logger *log.Logger
 }
 
+func reqFormatter(req *http.Request) string {
+	return fmt.Sprintf("[%s] %s | %s", req.Method, req.RequestURI, req.RemoteAddr)
+}
+
 func main() {
+	logger := log.New(os.Stdout, "[server] ", 0)
 	ctxFn := func(c vesper.Context) CustomContext {
 		return CustomContext{
 			Context: c,
-			Logger:  log.New(os.Stdout, "[server] ", 0),
+			Logger:  logger,
 		}
 	}
 
@@ -29,15 +36,21 @@ func main() {
 
 	srv := vesper.NewServerWithCustomContext(cfg, ctxFn)
 
-	srv.Handle("/", func(c CustomContext) {
-		c.Logger.Printf("received request: %v", c.Request())
+	srv.UseMiddleware(
+		vesper.ErrorHandler[CustomContext](logger),
+		vesper.RequestLogger[CustomContext](reqFormatter, logger),
+	)
 
-		c.ResponseWriter().WriteHeader(200)
-		c.ResponseWriter().Write([]byte("Hello World!"))
+	srv.Handle("/", func(c CustomContext) error {
+		if _, err := c.ResponseWriter().Write([]byte("Hello World!")); err != nil {
+			return fmt.Errorf("writing response: %w", err)
+		}
+
+		return nil
 	})
 
-	log.Printf("server listening on port %s...", port)
+	logger.Printf("server listening on port %s...\n", port)
 	if err := srv.Serve(); err != nil {
-		log.Printf("received error: %v", err)
+		logger.Printf("received error: %v\n", err)
 	}
 }
