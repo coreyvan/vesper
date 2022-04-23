@@ -23,6 +23,8 @@ func ErrorHandler[T Context](logger *log.Logger) Middleware[T] {
 		return func(ctx T) error {
 			if err := next(ctx); err != nil {
 				logger.Printf("error handled: %v", err)
+				ctx.ResponseWriter().WriteHeader(500)
+				ctx.ResponseWriter().Write([]byte("Internal server error"))
 			}
 			return nil
 		}

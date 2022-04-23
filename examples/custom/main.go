@@ -49,6 +49,20 @@ func main() {
 		return nil
 	})
 
+	srv.Handle("/error", func(c CustomContext) error {
+		w := c.ResponseWriter()
+
+		c.Logger.Println("handled error")
+		w.WriteHeader(500)
+		w.Write([]byte("Internal Server Error"))
+
+		return nil
+	})
+
+	srv.Handle("/unhandled", func(c CustomContext) error {
+		return fmt.Errorf("unhandled error")
+	})
+
 	logger.Printf("server listening on port %s...\n", port)
 	if err := srv.Serve(); err != nil {
 		logger.Printf("received error: %v\n", err)
