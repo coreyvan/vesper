@@ -2,18 +2,20 @@ package vesper
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
+	"sync"
 )
 
-type ContextFn[T any] func(Context) T
+type ContextFn[T Context] func(Context) T
 
-type Server[T any] struct {
+type Server[T Context] struct {
 	host string
 	port string
 	mux  *http.ServeMux
 	fn   ContextFn[T]
+	mw   []Middleware[T]
+	mu   *sync.RWMutex
 }
 
 type ServerConfig struct {
@@ -27,16 +29,18 @@ func NewServer(cfg ServerConfig) *Server[Context] {
 	})
 }
 
-func NewServerWithCustomContext[T any](cfg ServerConfig, fn ContextFn[T]) *Server[T] {
+func NewServerWithCustomContext[T Context](cfg ServerConfig, fn ContextFn[T]) *Server[T] {
 	return newServer(cfg, fn)
 }
 
-func newServer[T any](cfg ServerConfig, fn ContextFn[T]) *Server[T] {
+func newServer[T Context](cfg ServerConfig, fn ContextFn[T]) *Server[T] {
 	return &Server[T]{
 		host: cfg.Host,
 		port: cfg.Port,
 		mux:  http.NewServeMux(),
 		fn:   fn,
+		mw:   []Middleware[T]{},
+		mu:   &sync.RWMutex{},
 	}
 }
 
@@ -49,19 +53,27 @@ func (s *Server[T]) Serve() error {
 	return http.Serve(lis, s.mux)
 }
 
-func (s *Server[T]) Handle(route string, handler Handler[T]) {
-	s.mux.HandleFunc(route, func(w http.ResponseWriter, req *http.Request) {
+func (s *Server[T]) Handle(route string, handler Handler[T], mw ...Middleware[T]) {
+	handler = wrapMiddleware(mw, handler)
+	handler = wrapMiddleware(s.mw, handler)
+
+	h := func(w http.ResponseWriter, req *http.Request) {
 		outCtx := s.fn(&context{
 			w: w,
 			r: req,
 		})
+
 		if err := handler(outCtx); err != nil {
-			w.WriteHeader(500)
-			if _, err := w.Write([]byte("Server Error")); err != nil {
-				log.Printf("error writing to client: %v", err)
-			}
-			
-			log.Printf("error from handler: %v", err)
+			// TODO: this shouldn't panic, it should gracefully shutdown the server
+			panic(err)
 		}
-	})
+	}
+	
+	s.mux.HandleFunc(route, h)
+}
+
+func (s *Server[T]) UseMiddleware(middleware ...Middleware[T]) {
+	s.mu.Lock()
+	s.mw = append(s.mw, middleware...)
+	s.mu.Unlock()
 }
