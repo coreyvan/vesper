@@ -3,7 +3,7 @@ package vesper
 import (
 	"context"
 	"fmt"
-	"log"
+	"go.uber.org/zap"
 	"net/http"
 	"os"
 	"sync"
@@ -21,11 +21,13 @@ type Server[T Context] struct {
 	mu       *sync.RWMutex
 	shutdown chan os.Signal
 	srv      *http.Server
+	logger   *zap.Logger
 }
 
 type ServerConfig struct {
-	Host string
-	Port string
+	Host   string
+	Port   string
+	Logger *zap.Logger
 }
 
 func NewServer(cfg ServerConfig) *Server[Context] {
@@ -44,6 +46,10 @@ func newServer[T Context](cfg ServerConfig, fn ContextFn[T]) *Server[T] {
 		//	TODO: add server config like timeouts here
 	}
 
+	if cfg.Logger == nil {
+		cfg.Logger = zap.NewNop()
+	}
+
 	return &Server[T]{
 		host:     cfg.Host,
 		port:     cfg.Port,
@@ -53,6 +59,7 @@ func newServer[T Context](cfg ServerConfig, fn ContextFn[T]) *Server[T] {
 		mu:       &sync.RWMutex{},
 		shutdown: make(chan os.Signal),
 		srv:      &srv,
+		logger:   cfg.Logger,
 	}
 }
 
@@ -78,7 +85,7 @@ func (s *Server[T]) Handle(route string, handler Handler[T], mw ...Middleware[T]
 		})
 
 		if err := handler(outCtx); err != nil {
-			log.Printf("error from handler... shutting down: %v", err)
+			s.logger.Sugar().Errorw("error from handler... shutting down", "error", err)
 			s.SignalShutdown()
 		}
 	}
