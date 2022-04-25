@@ -10,23 +10,23 @@ type Context interface {
 	SetResponseWriter(http.ResponseWriter)
 }
 
-type context struct {
+type ctx struct {
 	w http.ResponseWriter
 	r *http.Request
 }
 
-func (c *context) Request() *http.Request {
+func (c *ctx) Request() *http.Request {
 	return c.r
 }
 
-func (c *context) SetRequest(r *http.Request) {
+func (c *ctx) SetRequest(r *http.Request) {
 	c.r = r
 }
 
-func (c *context) ResponseWriter() http.ResponseWriter {
+func (c *ctx) ResponseWriter() http.ResponseWriter {
 	return c.w
 }
 
-func (c *context) SetResponseWriter(w http.ResponseWriter) {
+func (c *ctx) SetResponseWriter(w http.ResponseWriter) {
 	c.w = w
 }
