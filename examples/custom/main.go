@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/coreyvan/vesper"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 const port = "4000"
@@ -20,7 +24,7 @@ func reqFormatter(req *http.Request) string {
 	return fmt.Sprintf("[%s] %s | %s", req.Method, req.RequestURI, req.RemoteAddr)
 }
 
-func main() {
+func run() error {
 	logger := log.New(os.Stdout, "[server] ", 0)
 	ctxFn := func(c vesper.Context) CustomContext {
 		return CustomContext{
@@ -63,8 +67,36 @@ func main() {
 		return fmt.Errorf("unhandled error")
 	})
 
-	logger.Printf("server listening on port %s...\n", port)
-	if err := srv.Serve(); err != nil {
-		logger.Printf("received error: %v\n", err)
+	shutdown := make(chan os.Signal)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+
+	serverErrors := make(chan error)
+
+	go func() {
+		logger.Printf("server listening on port %s...\n", port)
+		serverErrors <- srv.Serve(shutdown)
+	}()
+
+	select {
+	case sig := <-shutdown:
+		logger.Printf("received os signal: %s\n", sig)
+		defer logger.Println("shutdown complete")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(ctx); err != nil {
+			return srv.Close()
+		}
+		return nil
+	case err := <-serverErrors:
+		return fmt.Errorf("server error: %w", err)
+	}
+}
+
+func main() {
+	if err := run(); err != nil {
+		// uh... why does this not exit the process?
+		log.Fatal(err)
 	}
 }
