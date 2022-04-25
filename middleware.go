@@ -1,7 +1,7 @@
 package vesper
 
 import (
-	"log"
+	"go.uber.org/zap"
 	"net/http"
 )
 
@@ -18,11 +18,11 @@ func wrapMiddleware[T Context](mw []Middleware[T], handler Handler[T]) Handler[T
 	return handler
 }
 
-func ErrorHandler[T Context](logger *log.Logger) Middleware[T] {
+func ErrorHandler[T Context](logger *zap.Logger) Middleware[T] {
 	return func(next Handler[T]) Handler[T] {
 		return func(ctx T) error {
 			if err := next(ctx); err != nil {
-				logger.Printf("error handled: %v", err)
+				logger.Sugar().Errorw("error from handler", "error", err)
 				ctx.ResponseWriter().WriteHeader(500)
 				ctx.ResponseWriter().Write([]byte("Internal server error"))
 			}
@@ -33,10 +33,10 @@ func ErrorHandler[T Context](logger *log.Logger) Middleware[T] {
 
 type RequestFormatter func(r *http.Request) string
 
-func RequestLogger[T Context](formatter RequestFormatter, logger *log.Logger) Middleware[T] {
+func RequestLogger[T Context](formatter RequestFormatter, logger *zap.Logger) Middleware[T] {
 	return func(next Handler[T]) Handler[T] {
 		return func(ctx T) error {
-			logger.Println(formatter(ctx.Request()))
+			logger.Info(formatter(ctx.Request()))
 			return next(ctx)
 		}
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/coreyvan/vesper"
-	"log"
+	"go.uber.org/zap"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,15 +17,14 @@ const port = "4000"
 type CustomContext struct {
 	vesper.Context
 
-	Logger *log.Logger
+	Logger *zap.Logger
 }
 
 func reqFormatter(req *http.Request) string {
 	return fmt.Sprintf("[%s] %s | %s", req.Method, req.RequestURI, req.RemoteAddr)
 }
 
-func run() error {
-	logger := log.New(os.Stdout, "[server] ", 0)
+func run(logger *zap.Logger) error {
 	ctxFn := func(c vesper.Context) CustomContext {
 		return CustomContext{
 			Context: c,
@@ -56,7 +55,7 @@ func run() error {
 	srv.Handle("/error", func(c CustomContext) error {
 		w := c.ResponseWriter()
 
-		c.Logger.Println("handled error")
+		c.Logger.Info("handled error")
 		w.WriteHeader(500)
 		w.Write([]byte("Internal Server Error"))
 
@@ -73,14 +72,14 @@ func run() error {
 	serverErrors := make(chan error)
 
 	go func() {
-		logger.Printf("server listening on port %s...\n", port)
+		logger.Sugar().Infof("server listening on port %s...\n", port)
 		serverErrors <- srv.Serve(shutdown)
 	}()
 
 	select {
 	case sig := <-shutdown:
-		logger.Printf("received os signal: %s\n", sig)
-		defer logger.Println("shutdown complete")
+		logger.Sugar().Infof("received os signal: %s\n", sig)
+		defer logger.Info("shutdown complete")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -95,8 +94,12 @@ func run() error {
 }
 
 func main() {
-	if err := run(); err != nil {
-		// uh... why does this not exit the process?
-		log.Fatal(err)
+	logger, err := zap.NewProduction()
+	if err != nil {
+		panic(err)
+	}
+
+	if err := run(logger); err != nil {
+		logger.Fatal(err.Error())
 	}
 }
