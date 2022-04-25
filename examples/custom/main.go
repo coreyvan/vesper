@@ -100,7 +100,6 @@ func main() {
 	}
 
 	if err := run(logger); err != nil {
-		// uh... why does this not exit the process?
 		logger.Fatal(err.Error())
 	}
 }
